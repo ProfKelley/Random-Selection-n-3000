@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A Sample of 3,000 — Accessible Simulation</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #111111;
+      --muted: #555555;
+      --green: #0a8a0a; /* population curve */
+      --blue: #1f6feb; /* sample bars */
+      --yellow: #ffd400; /* sampled dot */
+      --border: #000000;
+      --focus: #ff6a00;
+    }
+
+    html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; line-height: 1.5; }
+    h1, h2 { line-height: 1.25; }
+    .container { max-width: 1100px; margin: 1rem auto; padding: 1rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .region { margin-block: 1.25rem; padding: 1rem; border: 2px solid var(--border); border-radius: 12px; }
+    .region:focus-within { outline: 3px dashed var(--focus); outline-offset: 4px; }
+    button { cursor: pointer; font-size: 1rem; border-radius: 12px; border: 2px solid var(--border); padding: .75rem 1rem; background: #f7f7f7; }
+    button:hover { background: #ececec; }
+    button:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+    .hint { color: var(--muted); font-size: .95rem; }
+
+    /* SVG layout */
+    .chart-wrap { display: grid; grid-template-rows: auto; gap: .5rem; }
+    .legend { font-size: .95rem; color: var(--muted); }
+
+    /* Axis text */
+    .axis text { font-size: 12px; fill: var(--text); }
+    .tick line, .axis path { stroke: var(--border); stroke-width: 1; }
+
+    .bar { fill: var(--blue); stroke: var(--border); stroke-width: 1; }
+    .curve { fill: none; stroke: var(--green); stroke-width: 2.5; }
+    .mean-line { stroke: var(--border); stroke-width: 2; }
+    .cursor-line { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 4 3; }
+    .dot { fill: var(--yellow); stroke: var(--border); stroke-width: .5; }
+
+    .stats { font-variant-numeric: tabular-nums; display: flex; gap: 1rem; align-items: center; }
+    .stat { padding: .25rem .5rem; border: 1px solid var(--border); border-radius: 8px; background: #fafafa; }
+
+    table { width: 100%; border-collapse: collapse; }
+    caption { text-align: left; font-weight: 600; margin-bottom: .5rem; }
+    th, td { border: 1px solid var(--border); padding: .5rem .6rem; text-align: right; font-variant-numeric: tabular-nums; }
+    th { background: #f2f2f2; text-align: left; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animated { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="sr-only" href="#controls">Skip to controls</a>
+  <main class="container" id="app-root">
+    <header>
+      <h1 id="title">A Sample of 3,000</h1>
+      <p id="purpose">To experience firsthand a simulation of randomly sampling 3,000 participants from a population. Imagine that for the US population, people spent on average 15 hours a week on social media. What's more, 68% of the population spent 12 to 18 hours a week on social media. How well could a sample of 3,000 participants represent the entire population?</p>
+      <section aria-labelledby="directions-h" class="region" role="region">
+        <h2 id="directions-h">Directions</h2>
+        <p>Below is the <strong>Begin</strong> button, a histogram of the population (in terms of their Social Media Usage), and a histogram of the sample. Once you click begin, participants (represented by a yellow dot) will be randomly selected one at a time from the population. After each participant is selected, the bottom histogram will be updated. The simulation stops when all 3,000 participants have been randomly selected. At that point, compare the sample mean with the population mean. As a representative sample, we would expect the sample and population mean to be very similar. Any difference between them would be considered an error, and referred to as <em>sampling error</em>. You may restart the simulation by clicking the "Begin" button.</p>
+      </section>
+    </header>
+
+    <!-- Controls -->
+    <section id="controls" class="region" role="region" aria-labelledby="controls-h">
+      <h2 id="controls-h">Controls</h2>
+      <button id="beginBtn" type="button" aria-describedby="begin-desc">Begin (or Restart)</button>
+      <p id="begin-desc" class="hint">Starts a fresh run, clearing previous dots and the sample histogram. Keyboard: <kbd>Space</kbd> also begins.</p>
+      <div aria-live="polite" aria-atomic="true" id="live" class="sr-only"></div>
+    </section>
+
+    <!-- Population Area -->
+    <section class="region" role="region" aria-labelledby="pop-h">
+      <h2 id="pop-h">Population</h2>
+      <p class="legend">Population distribution: mean = 15 hours/week, standard deviation = 3. X-axis ticks every 3 from 0 to 27. Y-axis is proportion up to 0.25 with ticks every 0.05.</p>
+      <div class="chart-wrap">
+        <svg id="popChart" role="img" aria-labelledby="popTitle popDesc" width="980" height="300" viewBox="0 0 980 300">
+          <title id="popTitle">Population distribution of social media hours</title>
+          <desc id="popDesc">A smooth green normal curve with mean at 15 hours. Yellow dots appear along the baseline for each sampled participant. A blue dashed vertical cursor marks the most recently sampled value. A black vertical line marks the population mean.</desc>
+        </svg>
+        <div class="stats" aria-live="polite" aria-atomic="true">
+          <div class="stat" id="popMeanStat">Population mean: <strong>15.000</strong> hours/week</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sample Area -->
+    <section class="region" role="region" aria-labelledby="sample-h">
+      <h2 id="sample-h">Sample</h2>
+      <p class="legend">Sample histogram updates after each draw (bin size = 1 hour). Y-axis is proportion and rescales to 0.05 above the tallest bin (rounded up to the next 0.05), starting at 1.00 for the first draw. X-axis ticks every 3 from 0 to 27. Bars are blue with thin black borders; a black vertical line marks the sample mean.</p>
+      <div class="chart-wrap">
+        <svg id="sampleChart" role="img" aria-labelledby="sampleTitle sampleDesc" width="980" height="300" viewBox="0 0 980 300">
+          <title id="sampleTitle">Sample histogram of social media hours</title>
+          <desc id="sampleDesc">Blue bars show the distribution of sampled participants, as a proportion. The vertical scale adapts as more data arrive. A black line shows the current sample mean.</desc>
+        </svg>
+        <div class="stats" aria-live="polite" aria-atomic="true">
+          <div class="stat">Sample size: <strong id="nStat">0</strong></div>
+          <div class="stat">Sample mean: <strong id="sampleMeanStat">—</strong></div>
+          <div class="stat">Current y-axis max (proportion): <strong id="ymaxStat">1.00</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sample Mean Updates Table -->
+    <section class="region" role="region" aria-labelledby="updates-h">
+      <h2 id="updates-h">Sample Mean Updates</h2>
+      <div class="hint">A new row appears after every 100 samples drawn. It presents the sample mean for all samples drawn up to that point (i.e., it is cummulative).</div>
+      <div class="table-wrap">
+        <table aria-describedby="updates-h">
+          <caption class="sr-only">Rows showing sample size and sample mean at 100-draw increments.</caption>
+          <thead>
+            <tr>
+              <th scope="col">Sample size</th>
+              <th scope="col" style="text-align:right">Sample mean</th>
+            </tr>
+          </thead>
+          <tbody id="updatesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="region" role="region" aria-labelledby="notes-h">
+      <h2 id="notes-h">Notes</h2>
+      <ul>
+        <li>Areas are ordered and aligned vertically: Controls, Population, Sample, then Sample Mean Updates.</li>
+        <li>All interactive elements are reachable by keyboard; important updates are announced via a live region for screen readers.</li>
+        <li>The simulation draws from a theoretical population modeled by a Normal distribution with mean 15 and standard deviation 3.</li>
+      </ul>
+    </footer>
+  </main>
+
+  <script>
+    // ---------- Configuration ----------
+    const POP_MEAN = 15;
+    const POP_SD = 3;
+    const X_MIN = 0, X_MAX = 27; // x-axis range
+    const X_TICK = 3;
+    const Y_MAX_POP = 0.25; // population chart y max (changed per request)
+    const Y_TICK = 0.05; // tick step for both charts
+    const N_TARGET = 3000;
+    const BIN_SIZE = 1; // sample bin size
+
+    // Timing: 20 seconds total to complete 3000 sequential draws
+    const TOTAL_MS = 20000;
+
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // ---------- DOM ----------
+    const popSvg = document.getElementById('popChart');
+    const sampleSvg = document.getElementById('sampleChart');
+    const beginBtn = document.getElementById('beginBtn');
+    const live = document.getElementById('live');
+    const nStat = document.getElementById('nStat');
+    const sampleMeanStat = document.getElementById('sampleMeanStat');
+    const ymaxStat = document.getElementById('ymaxStat');
+    const updatesBody = document.getElementById('updatesBody');
+
+    // ---------- Utilities ----------
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function linInterp(a, b, t) { return a + (b - a) * t; }
+
+    // Random Normal via Box–Muller
+    function randn(mean = 0, sd = 1) {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      const mag = Math.sqrt(-2.0 * Math.log(u));
+      const z0 = mag * Math.cos(2.0 * Math.PI * v);
+      return mean + sd * z0;
+    }
+
+    function normalPdf(x, mean, sd) {
+      const z = (x - mean) / sd;
+      return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
+    }
+
+    // ---------- Scales & Layout ----------
+    function buildScales(svg, yMax) {
+      const margin = { top: 10, right: 20, bottom: 45, left: 55 };
+      const width = svg.viewBox.baseVal.width;
+      const height = svg.viewBox.baseVal.height;
+      const innerW = width - margin.left - margin.right;
+      const innerH = height - margin.top - margin.bottom;
+
+      const xScale = (x) => margin.left + ( (x - X_MIN) / (X_MAX - X_MIN) ) * innerW;
+      const yScale = (y) => margin.top + innerH - (y / yMax) * innerH;
+
+      return { margin, width, height, innerW, innerH, xScale, yScale };
+    }
+
+    function clearSvg(svg) {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+    }
+
+    // Draw axes with ticks and labels
+    function drawAxes(svg, yMax, yLabel) {
+      const g = buildScales(svg, yMax);
+      const { margin, width, height, innerW, innerH, xScale, yScale } = g;
+
+      // Axes lines
+      const axis = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      axis.setAttribute('class', 'axis');
+
+      // X axis
+      const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const xBaseline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      xBaseline.setAttribute('x1', margin.left);
+      xBaseline.setAttribute('x2', margin.left + innerW);
+      xBaseline.setAttribute('y1', margin.top + innerH);
+      xBaseline.setAttribute('y2', margin.top + innerH);
+      xAxis.appendChild(xBaseline);
+      for (let x = X_MIN; x <= X_MAX; x += X_TICK) {
+        const tx = xScale(x);
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', tx); tick.setAttribute('x2', tx);
+        tick.setAttribute('y1', margin.top + innerH);
+        tick.setAttribute('y2', margin.top + innerH + 6);
+        xAxis.appendChild(tick);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', tx); label.setAttribute('y', margin.top + innerH + 20);
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = x.toString();
+        xAxis.appendChild(label);
+      }
+      const xlabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      xlabel.textContent = 'Hours per week';
+      xlabel.setAttribute('x', margin.left + innerW / 2);
+      xlabel.setAttribute('y', height - 5);
+      xlabel.setAttribute('text-anchor', 'middle');
+      xAxis.appendChild(xlabel);
+
+      // Y axis
+      const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const yBaseline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      yBaseline.setAttribute('x1', margin.left);
+      yBaseline.setAttribute('x2', margin.left);
+      yBaseline.setAttribute('y1', margin.top);
+      yBaseline.setAttribute('y2', margin.top + innerH);
+      yAxis.appendChild(yBaseline);
+
+      for (let y = 0; y <= yMax + 1e-9; y = +(y + Y_TICK).toFixed(2)) {
+        const ty = yScale(y);
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', margin.left - 6); tick.setAttribute('x2', margin.left);
+        tick.setAttribute('y1', ty); tick.setAttribute('y2', ty);
+        yAxis.appendChild(tick);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', margin.left - 10); label.setAttribute('y', ty + 4);
+        label.setAttribute('text-anchor', 'end');
+        label.textContent = y.toFixed(2);
+        yAxis.appendChild(label);
+      }
+      const ylabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      ylabel.textContent = yLabel;
+      ylabel.setAttribute('transform', `translate(${15}, ${margin.top + innerH / 2}) rotate(-90)`);
+      ylabel.setAttribute('text-anchor', 'middle');
+      yAxis.appendChild(ylabel);
+
+      axis.appendChild(xAxis);
+      axis.appendChild(yAxis);
+      svg.appendChild(axis);
+
+      return g;
+    }
+
+    // Draw population curve and static elements
+    function drawPopulation() {
+      clearSvg(popSvg);
+      const g = drawAxes(popSvg, Y_MAX_POP, 'Proportion');
+      const { xScale, yScale } = g;
+
+      // Normal curve path across x-range
+      const steps = 540; // smooth curve
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      let d = '';
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = linInterp(X_MIN, X_MAX, t);
+        const y = normalPdf(x, POP_MEAN, POP_SD);
+        const px = xScale(x);
+        const py = yScale(y);
+        d += (i === 0 ? 'M' : 'L') + px + ' ' + py + ' ';
+      }
+      path.setAttribute('d', d.trim());
+      path.setAttribute('class', 'curve');
+      path.setAttribute('aria-hidden', 'true');
+      popSvg.appendChild(path);
+
+      // Mean marker
+      const meanLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      meanLine.setAttribute('x1', xScale(POP_MEAN));
+      meanLine.setAttribute('x2', xScale(POP_MEAN));
+      meanLine.setAttribute('y1', yScale(0));
+      meanLine.setAttribute('y2', yScale(normalPdf(POP_MEAN, POP_MEAN, POP_SD)));
+      meanLine.setAttribute('class', 'mean-line');
+      meanLine.setAttribute('aria-label', 'Population mean');
+      popSvg.appendChild(meanLine);
+
+      // Cursor line for current sample (blue dashed)
+      const cursor = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      cursor.setAttribute('id', 'popCursor');
+      cursor.setAttribute('class', 'cursor-line');
+      cursor.setAttribute('x1', xScale(POP_MEAN));
+      cursor.setAttribute('x2', xScale(POP_MEAN));
+      cursor.setAttribute('y1', yScale(0));
+      cursor.setAttribute('y2', yScale(Y_MAX_POP));
+      cursor.style.opacity = 0; // hidden until first draw
+      popSvg.appendChild(cursor);
+
+      // Group to hold yellow dots (samples)
+      const dots = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      dots.setAttribute('id', 'popDots');
+      popSvg.appendChild(dots);
+
+      return g;
+    }
+
+    // Draw sample histogram (bars + axes). yMax dynamic.
+    function drawSample(yMax) {
+      clearSvg(sampleSvg);
+      const g = drawAxes(sampleSvg, yMax, 'Proportion');
+      const { xScale, yScale, margin } = g;
+
+      // Mean line placeholder
+      const meanLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      meanLine.setAttribute('id', 'sampleMeanLine');
+      meanLine.setAttribute('class', 'mean-line');
+      meanLine.setAttribute('x1', xScale(POP_MEAN));
+      meanLine.setAttribute('x2', xScale(POP_MEAN));
+      meanLine.setAttribute('y1', yScale(0));
+      meanLine.setAttribute('y2', margin.top);
+      sampleSvg.appendChild(meanLine);
+
+      // Bars group
+      const bars = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      bars.setAttribute('id', 'bars');
+      sampleSvg.appendChild(bars);
+
+      return g;
+    }
+
+    // ---------- Simulation State ----------
+    let running = false; // whether a run is active
+    let n = 0;
+    let sum = 0;
+    let bins = new Array(Math.ceil((X_MAX - X_MIN) / BIN_SIZE)).fill(0);
+    let ymaxSample = 1.0; // starts at 1.0, then adapts after second draw
+
+    let gPop, gSample;
+
+    // pacing
+    let tStart = 0;
+
+    function resetAll() {
+      running = false; n = 0; sum = 0;
+      bins = new Array(Math.ceil((X_MAX - X_MIN) / BIN_SIZE)).fill(0);
+      ymaxSample = 1.0;
+      gPop = drawPopulation();
+      gSample = drawSample(ymaxSample);
+      updateSampleBars();
+      updateStats();
+      // clear table
+      updatesBody.innerHTML = '';
+      announce('Simulation reset. Ready to begin.');
+    }
+
+    // ---------- Rendering Helpers ----------
+    function updateCursor(xVal) {
+      const c = document.getElementById('popCursor');
+      c.style.opacity = 1;
+      const { yScale } = gPop;
+      const x = gPop.xScale(xVal);
+      c.setAttribute('x1', x); c.setAttribute('x2', x);
+      c.setAttribute('y1', yScale(0)); c.setAttribute('y2', yScale(Y_MAX_POP));
+    }
+
+    function addDot(xVal) {
+      const { xScale, yScale } = gPop;
+      const y = yScale(0) - 6; // just above x-axis baseline
+      const cx = xScale(xVal);
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('class', 'dot');
+      dot.setAttribute('r', 3.5);
+      dot.setAttribute('cx', cx);
+      dot.setAttribute('cy', y);
+      document.getElementById('popDots').appendChild(dot);
+    }
+
+    function updateSampleBars() {
+      // Redraw bars according to current bins and y scale
+      clearBars();
+      const bars = document.getElementById('bars');
+      const { xScale, yScale } = gSample;
+      for (let i = 0; i < bins.length; i++) {
+        const x0 = X_MIN + i * BIN_SIZE;
+        const x1 = x0 + BIN_SIZE;
+        const px0 = xScale(x0);
+        const px1 = xScale(x1);
+        const proportion = n > 0 ? bins[i] / n : 0;
+        const y = yScale(proportion);
+        const y0 = yScale(0);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('class', 'bar');
+        rect.setAttribute('x', px0);
+        rect.setAttribute('y', y);
+        rect.setAttribute('width', Math.max(1, px1 - px0));
+        rect.setAttribute('height', Math.max(0, y0 - y));
+        rect.setAttribute('role', 'img');
+        rect.setAttribute('aria-label', `Bin ${x0}–${x1} hours: ${(proportion).toFixed(3)} proportion`);
+        bars.appendChild(rect);
+      }
+
+      // Update sample mean line
+      const meanLine = document.getElementById('sampleMeanLine');
+      const mean = n > 0 ? (sum / n) : POP_MEAN;
+      meanLine.setAttribute('x1', gSample.xScale(mean));
+      meanLine.setAttribute('x2', gSample.xScale(mean));
+    }
+
+    function clearBars() {
+      const bars = document.getElementById('bars');
+      if (!bars) return;
+      while (bars.firstChild) bars.removeChild(bars.firstChild);
+    }
+
+    function updateStats(lastVal=null) {
+      nStat.textContent = n.toString();
+      const mean = n > 0 ? (sum / n) : NaN;
+      sampleMeanStat.textContent = Number.isFinite(mean) ? mean.toFixed(3) + ' h/wk' : '—';
+      ymaxStat.textContent = ymaxSample.toFixed(2);
+      if (lastVal !== null) {
+        const msg = `n ${n} of ${N_TARGET}. Last value ${lastVal.toFixed(2)} hours. Sample mean ${(sum/n).toFixed(3)}.`;
+        announce(msg);
+      }
+    }
+
+    function announce(text) { live.textContent = text; }
+
+    // After second draw, recalc yMax for sample chart
+    function maybeRescaleSampleYAxis() {
+      if (n < 2) return false; // stays 1.0 until second draw completes
+      const maxProp = bins.reduce((m, c) => Math.max(m, c / n), 0);
+      let newMax = maxProp + 0.05;
+      // Round up to next multiple of 0.05
+      newMax = Math.ceil(newMax / 0.05) * 0.05;
+      newMax = Math.max(newMax, 0.10); // guard a sensible minimum
+      if (Math.abs(newMax - ymaxSample) > 1e-9) {
+        ymaxSample = newMax;
+        // Redraw entire sample chart with new y-scale
+        gSample = drawSample(ymaxSample);
+        updateSampleBars();
+        announce(`Sample y-axis rescaled to ${ymaxSample.toFixed(2)} proportion.`);
+        return true;
+      }
+      return false;
+    }
+
+    function appendUpdateRow() {
+      if (n % 100 !== 0) return;
+      const tr = document.createElement('tr');
+      const tdN = document.createElement('td');
+      const tdMean = document.createElement('td');
+      tdN.textContent = n.toString();
+      tdMean.textContent = (sum / n).toFixed(3);
+      tdMean.style.textAlign = 'right';
+      tr.appendChild(tdN); tr.appendChild(tdMean);
+      updatesBody.appendChild(tr);
+    }
+
+    // ---------- Simulation Loop (paced over TOTAL_MS) ----------
+    function drawNext() {
+      if (n >= N_TARGET) return false;
+      // Draw a value from population
+      let x = randn(POP_MEAN, POP_SD);
+      // Keep values within the visual domain for plotting
+      x = clamp(x, X_MIN + 1e-6, X_MAX - 1e-6);
+      updateCursor(x);
+      addDot(x);
+      // Update bins
+      const idx = Math.floor((x - X_MIN) / BIN_SIZE);
+      if (idx >= 0 && idx < bins.length) bins[idx] += 1;
+      n += 1;
+      sum += x;
+
+      // Update sample chart & stats
+      maybeRescaleSampleYAxis();
+      updateSampleBars();
+      updateStats(x);
+      appendUpdateRow();
+
+      // Hide cursor after final draw
+      if (n >= N_TARGET) {
+        document.getElementById('popCursor').style.opacity = 0;
+        announce(`Sampling complete. Compare sample mean ${(sum/n).toFixed(3)} to population mean ${POP_MEAN.toFixed(3)}.`);
+      }
+      return true;
+    }
+
+    let rafId = null;
+    function pacedLoop(ts) {
+      if (!running) { rafId = null; return; }
+      if (!tStart) tStart = ts;
+      const elapsed = ts - tStart;
+      // target number of draws by now
+      const targetN = Math.min(N_TARGET, Math.floor((elapsed / TOTAL_MS) * N_TARGET));
+      while (n < targetN) {
+        drawNext();
+      }
+      if (elapsed < TOTAL_MS || n < N_TARGET) {
+        rafId = requestAnimationFrame(pacedLoop);
+      } else {
+        running = false; rafId = null;
+      }
+    }
+
+    function start() {
+      // Restart from scratch and begin paced animation
+      resetAll();
+      running = true;
+      tStart = 0;
+      if (!rafId) rafId = requestAnimationFrame(pacedLoop);
+    }
+
+    // ---------- Event Wiring ----------
+    beginBtn.addEventListener('click', start);
+    // Keyboard shortcut: Space to begin/restart
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); start(); }
+    });
+
+    // Initial render
+    resetAll();
+  </script>
+</body>
+</html>
