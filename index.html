@@ -109,10 +109,13 @@
     <!-- Sample Mean Updates Table -->
     <section class="region" role="region" aria-labelledby="updates-h">
       <h2 id="updates-h">Sample Mean Updates</h2>
-      <div class="hint">A new row appears after every 100 samples drawn. It presents the sample mean for all samples drawn up to that point (i.e., it is cummulative).</div>
+      <div class="hint">Rows appear after every draw up to n = 10, then every 10 draws up to n = 100, and every 100 draws thereafter.</div>
       <div class="table-wrap">
         <table aria-describedby="updates-h">
-          <caption class="sr-only">Rows showing sample size and sample mean at 100-draw increments.</caption>
+          <caption class="sr-only">
+            Rows show the cumulative sample size and sample mean at the following increments: every draw up to n = 10, every 10 draws up to n = 100, and every 100 draws thereafter.
+          </caption>
+
           <thead>
             <tr>
               <th scope="col">Sample size</th>
@@ -463,7 +466,7 @@
     }
 
     function appendUpdateRow() {
-      if (n % 100 !== 0) return;
+      if (!((n <= 10) || (n <= 100 && n % 10 === 0) || (n > 100 && n % 100 === 0))) return;
       const tr = document.createElement('tr');
       const tdN = document.createElement('td');
       const tdMean = document.createElement('td');
